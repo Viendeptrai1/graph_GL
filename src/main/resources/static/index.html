@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GraphQL Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h2 { margin-top: 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; }
+    .muted { color: #777; }
+    select, button { padding: 6px 10px; }
+  </style>
+</head>
+<body>
+  <h1>GraphQL + Spring Boot</h1>
+
+  <section>
+    <h2>Sản phẩm giá tăng dần</h2>
+    <div id="productsAsc" class="grid"></div>
+  </section>
+
+  <section>
+    <h2>Sản phẩm theo Category</h2>
+    <label>Chọn category: <select id="categorySelect"></select></label>
+    <button id="loadByCat">Tải</button>
+    <div id="productsByCat" class="grid"></div>
+  </section>
+
+  <script>
+    async function gql(query, variables) {
+      const res = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables })
+      });
+      const json = await res.json();
+      if (json.errors) throw new Error(JSON.stringify(json.errors));
+      return json.data;
+    }
+
+    function renderProducts(el, products) {
+      el.innerHTML = products.map(p => `
+        <div class="card">
+          <div><strong>${p.title}</strong></div>
+          <div class="muted">Giá: ${p.price.toLocaleString('vi-VN')} đ</div>
+          <div>Số lượng: ${p.quantity}</div>
+          <div>Category: ${p.category?.name ?? ''}</div>
+          <div>Người bán: ${p.user?.fullname ?? ''}</div>
+        </div>
+      `).join('');
+    }
+
+    async function loadProductsAsc() {
+      const data = await gql(`
+        query { productsByPriceAsc { id title quantity price desc category { id name } user { id fullname } } }
+      `);
+      renderProducts(document.getElementById('productsAsc'), data.productsByPriceAsc);
+    }
+
+    async function loadCategories() {
+      const data = await gql(`query { categories { id name } }`);
+      const sel = document.getElementById('categorySelect');
+      sel.innerHTML = data.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }
+
+    async function loadByCategory() {
+      const id = document.getElementById('categorySelect').value;
+      const data = await gql(`
+        query($cid: ID!) { productsByCategory(categoryId: $cid) { id title quantity price category { id name } user { id fullname } } }
+      `, { cid: id });
+      renderProducts(document.getElementById('productsByCat'), data.productsByCategory);
+    }
+
+    document.getElementById('loadByCat').addEventListener('click', loadByCategory);
+
+    (async function init(){
+      try {
+        await loadCategories();
+        await loadProductsAsc();
+      } catch(e) {
+        console.error(e);
+        alert('Có lỗi khi tải dữ liệu. Kiểm tra console.');
+      }
+    })();
+  </script>
+</body>
+</html>
